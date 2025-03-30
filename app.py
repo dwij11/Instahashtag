@@ -18,37 +18,26 @@ USER_AGENTS = [
 
 def get_count(tag):
     url = f"https://www.instagram.com/explore/tags/{tag}"
-    retries = 3
-    delay = 2
-    for attempt in range(retries):
-        try:
-            headers = {'User-Agent': random.choice(USER_AGENTS)}
-            s = requests.get(url, timeout=10, headers=headers)
-            s.raise_for_status()
-            soup = BeautifulSoup(s.content, "html.parser")
-            meta_tags = soup.find_all("meta")
-            if len(meta_tags) > 6:
-                content = meta_tags[6]["content"]
-                count_str = content.split(" ")[0].replace("K", "000").replace("B", "000000000").replace("M", "000000").replace(".", "")
-                if count_str.isdigit():
-                    return int(count_str)
-                else:
-                    return 0
-            else:
-                return 0
-        except requests.exceptions.RequestException as e:
-            if s.status_code == 429:
-                time.sleep(delay * (attempt + 1))
-            else:
-                st.error(f"Error fetching {url}: {e}")
-                return 0
-        except (IndexError, KeyError, ValueError) as e:
-            st.error(f"Error parsing Instagram data for {tag}: {e}")
+    try:
+        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        s = requests.get(url, timeout=10, headers=headers)
+        s.raise_for_status()
+        soup = BeautifulSoup(s.content, "html.parser")
+        meta_tags = soup.find_all("meta")
+        if len(meta_tags) > 6:
+            content = meta_tags[6]["content"]
+            count_str = content.split(" ")[0].replace("K", "000").replace("B", "000000000").replace("M", "000000").replace(".", "")
+            return int(count_str)
+        else:
             return 0
-    return 0
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error fetching {url}: {e}")
+        return 0
+    except (IndexError, KeyError, ValueError) as e:
+        st.error(f"Error parsing Instagram data for {tag}: {e}")
+        return 0
 
 def get_best(tag, topn):
-    # ... (get_best function remains the same)
     url = f"https://best-hashtags.com/hashtag/{tag}/"
     try:
         headers = {'User-Agent': random.choice(USER_AGENTS)}
@@ -66,7 +55,6 @@ def get_best(tag, topn):
         return []
 
 def load_data():
-    # ... (load_data function remains the same)
     try:
         with open("database.json", "r") as f:
             return json.load(f)
@@ -79,7 +67,6 @@ def load_data():
 data = load_data()
 
 with st.sidebar:
-    # ... (sidebar code remains the same)
     st.header("Hashtag Configuration")
     num_tags = st.number_input("Number of Tags", 1, 30, 5)
     tags = []
@@ -90,7 +77,6 @@ with st.sidebar:
         sizes.append(col2.number_input(f"Top-N {i+1}", 1, 10, 5, key=f"size_{i}"))
 
 if st.button("Analyze Hashtags"):
-    # ... (rest of the code remains the same)
     tab_names = ["All Hashtags"] + tags
     tag_tabs = st.tabs(tab_names)
     all_hashtags = []
@@ -108,7 +94,7 @@ if st.button("Analyze Hashtags"):
                 hashtag_count = get_count(hashtag.replace("#", ""))
                 data["hashtag_data"][hashtag] = hashtag_count
             hashtag_data.append((f"{hashtag}<br>{hashtag_count:,}", hashtag_count))
-            time.sleep(random.uniform(2, 5)) #increased delay.
+            time.sleep(random.uniform(1, 3))
 
         all_hashtags.extend(hashtags)
 
