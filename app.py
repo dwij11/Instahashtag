@@ -5,12 +5,13 @@ import json
 import pandas as pd
 import plotly.express as px
 
-st.title("Instagram Hashtag Analysis")
+st.set_page_config(page_title="Instagram Hashtag Analyzer", layout="wide")
+st.title("Instagram Hashtag Analysis 📊")
 
 def get_count(tag):
     url = f"https://www.instagram.com/explore/tags/{tag}"
     try:
-        s = requests.get(url)
+        s = requests.get(url, timeout=10)  # Added timeout
         s.raise_for_status()
         soup = BeautifulSoup(s.content, "html.parser")
         meta_tags = soup.find_all("meta")
@@ -21,61 +22,61 @@ def get_count(tag):
         else:
             return 0
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching URL: {e}")
+        st.error(f"Error fetching {url}: {e}")
         return 0
     except (IndexError, KeyError, ValueError) as e:
-        print(f"Error parsing Instagram data: {e}")
+        st.error(f"Error parsing Instagram data for {tag}: {e}")
         return 0
 
 def get_best(tag, topn):
     url = f"https://best-hashtags.com/hashtag/{tag}/"
     try:
-        s = requests.get(url)
+        s = requests.get(url, timeout=10) #added timeout
         s.raise_for_status()
         soup = BeautifulSoup(s.content, "html.parser")
         tags_div = soup.find("div", {"class": "tag-box tag-box-v3 margin-bottom-40"})
         if tags_div:
             tags = tags_div.text.split()[:topn]
-            tags = [tag for tag in tags]
-            return tags
+            return [tag for tag in tags]
         else:
             return []
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching best-hashtags URL: {e}")
+        st.error(f"Error fetching best-hashtags URL: {e}")
         return []
 
 def load_data():
     try:
         with open("database.json", "r") as f:
-            data = json.load(f)
+            return json.load(f)
     except FileNotFoundError:
         data = {"hashtag_data": {}}
         with open("database.json", "w") as f:
             json.dump(data, f, indent=4)
-    return data
+        return data
 
 data = load_data()
 
-num_tags = st.sidebar.number_input("Select number of tags", 1, 30)
-tags = []
-sizes = []
-st.sidebar.header("Tags")
-col1, col2 = st.sidebar.columns(2)
+with st.sidebar:
+    st.header("Hashtag Configuration")
+    num_tags = st.number_input("Number of Tags", 1, 30, 5)
+    tags = []
+    sizes = []
+    for i in range(num_tags):
+        col1, col2 = st.columns(2)
+        tags.append(col1.text_input(f"Tag {i+1}", key=f"tag_{i}"))
+        sizes.append(col2.number_input(f"Top-N {i+1}", 1, 10, 5, key=f"size_{i}"))
 
-for i in range(num_tags):
-    tag = col1.text_input(f"Tag {i}", key=f"tag_{i}")
-    size = col2.number_input(f"Top-N {i}", 1, 10, key=f"size_{i}")
-    tags.append(tag)
-    sizes.append(size)
-
-if st.sidebar.button("Create Hashtags"):
-    tab_names = ["all"]
-    tab_names = tab_names + [tags[i] for i in range(num_tags)]
+if st.button("Analyze Hashtags"):
+    tab_names = ["All Hashtags"] + tags
     tag_tabs = st.tabs(tab_names)
     all_hashtags = []
     hashtag_data = []
-    for i in range(num_tags):
-        hashtags = get_best(tags[i], sizes[i])
+
+    with tag_tabs[0]:
+        st.subheader("Combined Hashtags")
+
+    for i, tag in enumerate(tags):
+        hashtags = get_best(tag, sizes[i])
         for hashtag in hashtags:
             if hashtag in data["hashtag_data"]:
                 hashtag_count = data["hashtag_data"][hashtag]
@@ -83,27 +84,28 @@ if st.sidebar.button("Create Hashtags"):
                 hashtag_count = get_count(hashtag.replace("#", ""))
                 data["hashtag_data"][hashtag] = hashtag_count
             hashtag_data.append((f"{hashtag}<br>{hashtag_count:,}", hashtag_count))
+        all_hashtags.extend(hashtags)
 
-        tag_tabs[i + 1].text_area(f"Tags for {tags[i]}", " ".join(hashtags))
-        all_hashtags = all_hashtags + hashtags
+        with tag_tabs[i + 1]:
+            st.subheader(f"Hashtags for {tag}")
+            st.text_area("Suggested Hashtags", " ".join(hashtags), height=150)
 
-    tag_tabs[0].text_area("All Hashtags", " ".join(all_hashtags))
+    with tag_tabs[0]:
+        st.text_area("All Suggested Hashtags", " ".join(all_hashtags), height=200)
 
-    st.header("Hashtag Count Data")
+    st.header("Hashtag Popularity Analysis")
     df = pd.DataFrame(hashtag_data, columns=["hashtag", "count"])
 
-    # Attempt to convert to numbers, handling errors
     df['count'] = pd.to_numeric(df['count'].str.split('<br>').str[1].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
     df['hashtag'] = df['hashtag'].str.split('<br>').str[0]
-
-    df = df[df['count'] >= 0] #keeping all valid counts
+    df = df[df['count'] > 0].sort_values("count", ascending=False)
 
     if not df.empty:
-        fig = px.bar(df, x='hashtag', y='count')
+        fig = px.bar(df, x='hashtag', y='count', title="Hashtag Popularity", labels={'count': 'Post Count', 'hashtag': 'Hashtag'})
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.write("No valid hashtag data to display. Displaying raw data collected.")
-        st.write(hashtag_data) #displaying the raw data.
+        st.warning("No valid hashtag data to display.")
+        st.write(hashtag_data)
 
     with open("database.json", "w") as f:
         json.dump(data, f, indent=4)
