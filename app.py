@@ -8,7 +8,6 @@ import plotly.express as px
 st.title("Instagram Hashtag Analysis")
 
 def get_count(tag):
-    # ... (your get_count() function with error handling)
     url = f"https://www.instagram.com/explore/tags/{tag}"
     try:
         s = requests.get(url)
@@ -29,7 +28,6 @@ def get_count(tag):
         return 0
 
 def get_best(tag, topn):
-    # ... (your get_best() function with error handling)
     url = f"https://best-hashtags.com/hashtag/{tag}/"
     try:
         s = requests.get(url)
@@ -47,7 +45,6 @@ def get_best(tag, topn):
         return []
 
 def load_data():
-    # ... (your load_data() function)
     try:
         with open("database.json", "r") as f:
             data = json.load(f)
@@ -95,18 +92,18 @@ if st.sidebar.button("Create Hashtags"):
     st.header("Hashtag Count Data")
     df = pd.DataFrame(hashtag_data, columns=["hashtag", "count"])
 
-    # Filter out bad data and convert to integers
-    df = df[df['count'] > 0]
-    df['count'] = pd.to_numeric(df['count'], errors='coerce').fillna(0).astype(int)
+    # Attempt to convert to numbers, handling errors
+    df['count'] = pd.to_numeric(df['count'].str.split('<br>').str[1].str.replace(',', ''), errors='coerce').fillna(0).astype(int)
+    df['hashtag'] = df['hashtag'].str.split('<br>').str[0]
 
-    df = df.sort_values("count")
+    df = df[df['count'] >= 0] #keeping all valid counts
 
-    # Only create the graph if the DataFrame is not empty
     if not df.empty:
         fig = px.bar(df, x='hashtag', y='count')
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.write("No valid hashtag data to display.")
+        st.write("No valid hashtag data to display. Displaying raw data collected.")
+        st.write(hashtag_data) #displaying the raw data.
 
     with open("database.json", "w") as f:
         json.dump(data, f, indent=4)
